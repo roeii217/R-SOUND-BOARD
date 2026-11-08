@@ -22,6 +22,7 @@ export default function ControllerScreen() {
   const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [activeSoundIds, setActiveSoundIds] = useState<Set<string>>(new Set());
   const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [playOnPhone, setPlayOnPhone] = useState<boolean>(true); // Enabled by default per user request!
 
   // Modals
   const [showGalleryUpload, setShowGalleryUpload] = useState<boolean>(false);
@@ -31,6 +32,7 @@ export default function ControllerScreen() {
   // References
   const realtimeRef = useRef<RealtimeManager | null>(null);
   const [pttClient, setPttClient] = useState<PTTClient | null>(null);
+  const localAudioInstancesRef = useRef<HTMLAudioElement[]>([]);
 
   // 1. Load initial sounds
   useEffect(() => {
@@ -47,8 +49,8 @@ export default function ControllerScreen() {
 
   // 2. Initialize Realtime and WebRTC PTT Client
   useEffect(() => {
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const isAndroid = /Android/.test(navigator.userAgent);
+    const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = typeof navigator !== 'undefined' && /Android/.test(navigator.userAgent);
     const osName = isIOS ? 'iPhone' : isAndroid ? 'Android Phone' : 'Mobile';
 
     const controllerDeviceId = `ctrl-${Math.random().toString(36).substring(2, 9)}`;
@@ -88,6 +90,7 @@ export default function ControllerScreen() {
 
       onStopSound: (msg) => {
         if (msg.all) {
+          stopAllLocalAudio();
           setActiveSoundIds(new Set());
         } else if (msg.soundId) {
           setActiveSoundIds((prev) => {
@@ -123,19 +126,51 @@ export default function ControllerScreen() {
     return () => {
       ptt.destroy();
       realtime.disconnect();
+      stopAllLocalAudio();
     };
   }, [roomId]);
 
+  const playLocalAudio = (url: string, volume: number = 1.0) => {
+    try {
+      const audio = new Audio(url);
+      audio.volume = Math.max(0, Math.min(1, volume));
+      localAudioInstancesRef.current.push(audio);
+      audio.onended = () => {
+        localAudioInstancesRef.current = localAudioInstancesRef.current.filter((a) => a !== audio);
+      };
+      audio.play().catch((err) => {
+        console.warn('Local phone audio playback notice:', err);
+      });
+    } catch (e) {
+      console.warn('Audio construction error:', e);
+    }
+  };
+
+  const stopAllLocalAudio = () => {
+    localAudioInstancesRef.current.forEach((audio) => {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {}
+    });
+    localAudioInstancesRef.current = [];
+  };
+
   // Handle Play trigger from phone button
   const handlePlaySound = (sound: Sound) => {
-    // Haptic feedback
+    // 1. Haptic feedback
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       try {
         navigator.vibrate(15);
       } catch {}
     }
 
-    // Trigger on host computer instantly via Realtime broadcast
+    // 2. Play on phone if enabled OR if disconnected
+    if (playOnPhone || !isConnected) {
+      playLocalAudio(sound.audioUrl, sound.volume);
+    }
+
+    // 3. Trigger on host computer instantly via Realtime broadcast
     realtimeRef.current?.sendPlaySound({
       soundId: sound.id,
       audioUrl: sound.audioUrl,
@@ -145,7 +180,7 @@ export default function ControllerScreen() {
       timestamp: Date.now(),
     });
 
-    // Local visual feedback
+    // 4. Local visual feedback
     setActiveSoundIds((prev) => new Set(prev).add(sound.id));
     setTimeout(() => {
       setActiveSoundIds((prev) => {
@@ -171,6 +206,7 @@ export default function ControllerScreen() {
         navigator.vibrate(20);
       } catch {}
     }
+    stopAllLocalAudio();
     realtimeRef.current?.sendStopSound({ all: true });
     setActiveSoundIds(new Set());
   };
@@ -182,11 +218,13 @@ export default function ControllerScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col justify-between select-none pb-safe">
-      {/* Mobile Header */}
+    <div className="min-h-screen bg-background flex flex-col justify-between pb-safe">
+      {/* Mobile Header with safe area insets */}
       <ControllerHeader
         roomId={roomId}
         isConnected={isConnected}
+        playOnPhone={playOnPhone}
+        onTogglePlayOnPhone={() => setPlayOnPhone(!playOnPhone)}
         onStopAll={handleStopAll}
         onOpenGalleryUpload={() => setShowGalleryUpload(true)}
         onOpenVoiceRecorder={() => setShowVoiceRecorder(true)}
@@ -194,17 +232,19 @@ export default function ControllerScreen() {
       />
 
       {/* Main Controller Content */}
-      <main className="flex-1 max-w-md w-full mx-auto p-3 space-y-4">
+      <main className="flex-1 max-w-md w-full mx-auto p-3.5 space-y-4">
         {/* Push-to-Talk Wireless Microphone Section */}
-        <section className="bg-surface/80 rounded-3xl border border-surface-border p-4 shadow-xl">
+        <section className="bg-surface/90 rounded-3xl border border-surface-border p-4 shadow-xl">
           <PushToTalkButton pttClient={pttClient} isConnected={isConnected} />
         </section>
 
         {/* Soundboard Buttons Section */}
         <section className="space-y-2">
           <div className="flex items-center justify-between text-xs font-bold text-zinc-400 px-1">
-            <span>SOUNDBOARD</span>
-            <span>Tap to play on computer</span>
+            <span>MEME SOUNDBOARD</span>
+            <span className="text-[11px] text-zinc-500">
+              {playOnPhone ? 'Plays on phone & PC' : 'Plays on PC'}
+            </span>
           </div>
 
           <SoundGrid

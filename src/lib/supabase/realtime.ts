@@ -25,6 +25,7 @@ export class RealtimeManager {
   private device: DevicePresence;
   private channel: RealtimeChannel | null = null;
   private localBroadcast: BroadcastChannel | null = null;
+  private sseEventSource: EventSource | null = null;
   private handlers: RoomEventHandlers = {};
   private activeDevices: Map<string, DevicePresence> = new Map();
 
@@ -37,13 +38,13 @@ export class RealtimeManager {
   public connect(): void {
     const supabase = getSupabase();
 
-    // 1. Setup local browser BroadcastChannel (instant zero-latency fallback)
+    // 1. Setup local browser BroadcastChannel (same-device tabs)
     if (typeof window !== 'undefined' && window.BroadcastChannel) {
       try {
         this.localBroadcast = new BroadcastChannel(`echoboard_${this.roomId}`);
         this.localBroadcast.onmessage = (event) => {
           const { type, payload, senderId } = event.data || {};
-          if (senderId === this.device.id) return; // Ignore own messages
+          if (senderId === this.device.id) return;
           this.handleIncomingEvent(type, payload);
         };
       } catch (e) {
@@ -51,7 +52,33 @@ export class RealtimeManager {
       }
     }
 
-    // 2. Setup Supabase Realtime if configured
+    // 2. Setup Server-Sent Events (SSE) for cross-device LAN / Cloud communication
+    if (typeof window !== 'undefined' && typeof EventSource !== 'undefined') {
+      try {
+        const streamUrl = `/api/realtime/stream?roomId=${encodeURIComponent(this.roomId)}&deviceId=${encodeURIComponent(
+          this.device.id
+        )}`;
+        this.sseEventSource = new EventSource(streamUrl);
+
+        this.sseEventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.senderId === this.device.id) return;
+            this.handleIncomingEvent(data.type, data.payload);
+          } catch (e) {
+            console.warn('SSE message parse error:', e);
+          }
+        };
+
+        this.sseEventSource.onerror = (e) => {
+          console.warn('SSE connection state/error:', e);
+        };
+      } catch (e) {
+        console.warn('SSE not initialized:', e);
+      }
+    }
+
+    // 3. Setup Supabase Realtime if configured
     if (supabase && isSupabaseConfigured()) {
       this.channel = supabase.channel(`room:${this.roomId}`, {
         config: {
@@ -89,8 +116,8 @@ export class RealtimeManager {
     this.activeDevices.set(this.device.id, this.device);
     this.emitPresenceUpdate();
 
-    // Broadcast presence join locally
-    this.broadcastLocal('presence:join', this.device);
+    // Broadcast presence join to other peers
+    this.broadcastBoth('presence:join', this.device);
   }
 
   private handleIncomingEvent(type: string, payload: unknown): void {
@@ -115,12 +142,26 @@ export class RealtimeManager {
         break;
       case 'presence:join': {
         const d = payload as DevicePresence;
-        this.activeDevices.set(d.id, d);
-        this.emitPresenceUpdate();
+        if (d && d.id) {
+          this.activeDevices.set(d.id, d);
+          this.emitPresenceUpdate();
+          // Reply with self presence so the newly joined device knows about us immediately!
+          this.broadcastBoth('presence:reply', this.device);
+        }
+        break;
+      }
+      case 'presence:reply': {
+        const d = payload as DevicePresence;
+        if (d && d.id) {
+          this.activeDevices.set(d.id, d);
+          this.emitPresenceUpdate();
+        }
         break;
       }
       case 'presence:leave': {
-        const id = payload as string;
+        const id = (typeof payload === 'object' && payload !== null && 'id' in payload)
+          ? (payload as { id: string }).id
+          : String(payload);
         this.activeDevices.delete(id);
         this.emitPresenceUpdate();
         break;
@@ -134,7 +175,8 @@ export class RealtimeManager {
     }
   }
 
-  private broadcastLocal(type: string, payload: unknown): void {
+  private broadcastBoth(type: string, payload: unknown): void {
+    // 1. BroadcastChannel (local tabs on same browser)
     if (this.localBroadcast) {
       try {
         this.localBroadcast.postMessage({
@@ -146,10 +188,26 @@ export class RealtimeManager {
         console.warn('Local broadcast post error:', e);
       }
     }
+
+    // 2. HTTP Server Relay (cross-device over Wi-Fi / internet)
+    if (typeof window !== 'undefined') {
+      fetch('/api/realtime/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomId: this.roomId,
+          type,
+          payload,
+          senderId: this.device.id,
+        }),
+      }).catch((e) => {
+        console.warn('Relay broadcast fetch error:', e);
+      });
+    }
   }
 
   public sendPlaySound(msg: PlaySoundMessage): void {
-    this.broadcastLocal('sound:play', msg);
+    this.broadcastBoth('sound:play', msg);
     if (this.channel) {
       this.channel.send({
         type: 'broadcast',
@@ -160,7 +218,7 @@ export class RealtimeManager {
   }
 
   public sendStopSound(msg: StopSoundMessage): void {
-    this.broadcastLocal('sound:stop', msg);
+    this.broadcastBoth('sound:stop', msg);
     if (this.channel) {
       this.channel.send({
         type: 'broadcast',
@@ -171,7 +229,7 @@ export class RealtimeManager {
   }
 
   public sendVolumeChange(msg: VolumeMessage): void {
-    this.broadcastLocal('sound:volume', msg);
+    this.broadcastBoth('sound:volume', msg);
     if (this.channel) {
       this.channel.send({
         type: 'broadcast',
@@ -182,7 +240,7 @@ export class RealtimeManager {
   }
 
   public sendSoundboardSync(msg: SoundboardSyncMessage): void {
-    this.broadcastLocal('soundboard:sync', msg);
+    this.broadcastBoth('soundboard:sync', msg);
     if (this.channel) {
       this.channel.send({
         type: 'broadcast',
@@ -193,7 +251,7 @@ export class RealtimeManager {
   }
 
   public sendPTTSignal(msg: PTTSignalMessage): void {
-    this.broadcastLocal('ptt:signal', msg);
+    this.broadcastBoth('ptt:signal', msg);
     if (this.channel) {
       this.channel.send({
         type: 'broadcast',
@@ -204,7 +262,7 @@ export class RealtimeManager {
   }
 
   public sendPTTState(msg: PTTStateMessage): void {
-    this.broadcastLocal('ptt:state', msg);
+    this.broadcastBoth('ptt:state', msg);
     if (this.channel) {
       this.channel.send({
         type: 'broadcast',
@@ -215,7 +273,12 @@ export class RealtimeManager {
   }
 
   public disconnect(): void {
-    this.broadcastLocal('presence:leave', this.device.id);
+    this.broadcastBoth('presence:leave', { id: this.device.id });
+
+    if (this.sseEventSource) {
+      this.sseEventSource.close();
+      this.sseEventSource = null;
+    }
 
     if (this.localBroadcast) {
       this.localBroadcast.close();

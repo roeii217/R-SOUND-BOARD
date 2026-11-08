@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import confetti from 'canvas-confetti';
+import { Volume2 } from 'lucide-react';
 import { Sound, Category, DevicePresence, PlaybackMode } from '../../../lib/types/soundboard';
 import { AudioEngine } from '../../../lib/audio/audio-engine';
 import { RealtimeManager } from '../../../lib/supabase/realtime';
@@ -25,6 +26,7 @@ export default function HostScreen() {
   const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [devices, setDevices] = useState<DevicePresence[]>([]);
   const [activeSoundIds, setActiveSoundIds] = useState<Set<string>>(new Set());
+  const [needsAudioUnlock, setNeedsAudioUnlock] = useState<boolean>(false);
 
   // Audio Controls State
   const [volume, setVolume] = useState<number>(0.8);
@@ -58,8 +60,25 @@ export default function HostScreen() {
     setIsMuted(engine.getIsMuted());
     setPlaybackMode(engine.getPlaybackMode());
 
+    // Check if AudioContext needs user interaction to unlock
+    const ctx = engine.init();
+    if (ctx.state === 'suspended') {
+      setNeedsAudioUnlock(true);
+    }
+
+    const unlockAudio = () => {
+      engine.resume().then(() => {
+        setNeedsAudioUnlock(false);
+      });
+    };
+
+    window.addEventListener('click', unlockAudio, { once: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
+
     return () => {
       mounted = false;
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
     };
   }, [roomId]);
 
@@ -268,6 +287,20 @@ export default function HostScreen() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* Autoplay Unlock Notice (if browser suspended audio) */}
+      {needsAudioUnlock && (
+        <div
+          onClick={() => {
+            AudioEngine.getInstance().resume();
+            setNeedsAudioUnlock(false);
+          }}
+          className="bg-accent/20 border-b border-accent/40 text-accent px-4 py-2.5 text-center text-xs font-bold cursor-pointer hover:bg-accent/30 transition-colors animate-pulse flex items-center justify-center gap-2"
+        >
+          <Volume2 className="w-4 h-4" />
+          <span>Click anywhere on this computer screen to enable computer speaker output!</span>
+        </div>
+      )}
+
       {/* Host Header */}
       <HostHeader
         roomId={roomId}
