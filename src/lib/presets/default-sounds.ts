@@ -140,5 +140,41 @@ export async function getDefaultSounds(roomId: string): Promise<Sound[]> {
       orderIndex: 10,
       volume: 1.0,
     },
+    {
+      id: `sound-${roomId}-12`,
+      roomId,
+      categoryId: 'cat-reactions',
+      name: '🚪 Knock Knock',
+      audioUrl: '/sounds/door-knock.mp3',
+      duration: 1.5,
+      color: '#78716c', // Stone
+      hotkey: 'W',
+      orderIndex: 11,
+      volume: 1.0,
+    },
+    {
+      id: `sound-${roomId}-13`,
+      roomId,
+      categoryId: 'cat-viral',
+      name: '🎵 Tunak Tunak Tun',
+      audioUrl: '/sounds/tunak.mp3',
+      duration: 5.0,
+      color: '#f59e0b', // Amber
+      hotkey: 'E',
+      orderIndex: 12,
+      volume: 0.9,
+    },
+    {
+      id: `sound-${roomId}-14`,
+      roomId,
+      categoryId: 'cat-reactions',
+      name: '📯 Air Horn',
+      audioUrl: '/sounds/airhorn.mp3',
+      duration: 1.5,
+      color: '#22c55e', // Green
+      hotkey: 'R',
+      orderIndex: 13,
+      volume: 0.85,
+    },
   ];
 }

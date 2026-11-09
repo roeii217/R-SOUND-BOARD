@@ -72,6 +72,7 @@ export default function ControllerScreen() {
           ...msg,
           peerName: controllerDevice.name,
         }),
+      sendAudioChunk: (msg) => realtimeRef.current?.sendPTTAudioChunk(msg),
     });
     setPttClient(ptt);
 

@@ -147,40 +147,44 @@ export class AudioEngine {
       return;
     }
 
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.loop = loop;
+    try {
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = loop;
 
-    const soundGain = ctx.createGain();
-    soundGain.gain.setValueAtTime(volume, ctx.currentTime);
+      const soundGain = ctx.createGain();
+      soundGain.gain.setValueAtTime(volume, ctx.currentTime);
 
-    source.connect(soundGain);
-    soundGain.connect(this.masterGain!);
+      source.connect(soundGain);
+      soundGain.connect(this.masterGain!);
 
-    const instance: ActiveSoundInstance = {
-      source,
-      gainNode: soundGain,
-      soundId,
-      startTime: ctx.currentTime,
-    };
+      const instance: ActiveSoundInstance = {
+        source,
+        gainNode: soundGain,
+        soundId,
+        startTime: ctx.currentTime,
+      };
 
-    const currentList = this.activeSounds.get(soundId) || [];
-    currentList.push(instance);
-    this.activeSounds.set(soundId, currentList);
+      const currentList = this.activeSounds.get(soundId) || [];
+      currentList.push(instance);
+      this.activeSounds.set(soundId, currentList);
 
-    source.onended = () => {
-      const list = this.activeSounds.get(soundId);
-      if (list) {
-        const filtered = list.filter((item) => item !== instance);
-        if (filtered.length > 0) {
-          this.activeSounds.set(soundId, filtered);
-        } else {
-          this.activeSounds.delete(soundId);
+      source.onended = () => {
+        const list = this.activeSounds.get(soundId);
+        if (list) {
+          const filtered = list.filter((item) => item !== instance);
+          if (filtered.length > 0) {
+            this.activeSounds.set(soundId, filtered);
+          } else {
+            this.activeSounds.delete(soundId);
+          }
         }
-      }
-    };
+      };
 
-    source.start(0);
+      source.start(0);
+    } catch {
+      this.playFallbackAudio(audioUrl, volume, loop);
+    }
   }
 
   private playFallbackAudio(url: string, volume: number, loop: boolean): void {
@@ -239,7 +243,7 @@ export class AudioEngine {
 
       this.pttSourceNode = this.ctx.createMediaStreamSource(stream);
       this.pttGainNode = this.ctx.createGain();
-      this.pttGainNode.gain.setValueAtTime(1.2, this.ctx.currentTime); // Slight boost for voice
+      this.pttGainNode.gain.setValueAtTime(1.4, this.ctx.currentTime); // Voice boost
 
       this.pttSourceNode.connect(this.pttGainNode);
       this.pttGainNode.connect(this.masterGain);
@@ -260,6 +264,45 @@ export class AudioEngine {
         this.pttGainNode.disconnect();
       } catch {}
       this.pttGainNode = null;
+    }
+  }
+
+  /**
+   * Plays an incoming wireless mic audio chunk (guaranteed fallback that works anywhere)
+   */
+  public async playPTTChunk(base64Data: string, mimeType: string = 'audio/webm'): Promise<void> {
+    try {
+      this.init();
+      if (!this.ctx || !this.masterGain) return;
+      await this.resume();
+
+      const binaryStr = atob(base64Data);
+      const len = binaryStr.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+
+      try {
+        const audioBuffer = await this.ctx.decodeAudioData(bytes.buffer.slice(0));
+        const source = this.ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        const voiceGain = this.ctx.createGain();
+        voiceGain.gain.setValueAtTime(1.4, this.ctx.currentTime);
+        source.connect(voiceGain);
+        voiceGain.connect(this.masterGain);
+        source.start(0);
+      } catch {
+        // Fallback to HTML5 audio element
+        const blob = new Blob([bytes], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.volume = this.isMuted ? 0 : this.volume;
+        audio.onended = () => URL.revokeObjectURL(url);
+        audio.play().catch(() => URL.revokeObjectURL(url));
+      }
+    } catch (e) {
+      console.warn('PTT chunk playback error:', e);
     }
   }
 }

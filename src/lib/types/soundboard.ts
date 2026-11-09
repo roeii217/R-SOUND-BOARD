@@ -83,3 +83,10 @@ export interface PTTStateMessage {
   peerId: string;
   peerName?: string;
 }
+
+export interface PTTAudioChunkMessage {
+  peerId: string;
+  chunk: string; // Base64 audio chunk
+  mimeType: string;
+  seq: number;
+}

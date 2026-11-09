@@ -180,6 +180,11 @@ export default function HostScreen() {
         pttClientRef.current?.handleStateMessage(state);
       },
 
+      onPTTAudioChunk: (msg) => {
+        // Play incoming PTT audio chunk on host speakers (SSE-relay fallback for voice)
+        AudioEngine.getInstance().playPTTChunk(msg.chunk, msg.mimeType);
+      },
+
       onPresenceChange: (devs) => {
         setDevices(devs);
       },

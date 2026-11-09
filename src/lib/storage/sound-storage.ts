@@ -52,7 +52,7 @@ export async function getBlobFromIndexedDB(key: string): Promise<Blob | null> {
 }
 
 /**
- * Uploads an audio blob to Supabase Storage or falls back to IndexedDB
+ * Uploads an audio blob to Server or Supabase Storage so ALL connected devices can access it!
  */
 export async function uploadSoundAudio(
   roomId: string,
@@ -60,7 +60,7 @@ export async function uploadSoundAudio(
   blob: Blob,
   fileName: string = 'sound.wav'
 ): Promise<string> {
-  // If Supabase is configured, upload to cloud storage bucket
+  // 1. If Supabase is configured, upload to cloud storage bucket
   if (isSupabaseConfigured()) {
     const supabase = getSupabase();
     if (supabase) {
@@ -88,7 +88,30 @@ export async function uploadSoundAudio(
     }
   }
 
-  // Fallback: Store locally in IndexedDB and create an object URL
+  // 2. Upload to Server Storage endpoint so both Phone and PC have the exact same accessible URL
+  try {
+    const formData = new FormData();
+    formData.append('file', blob, fileName);
+    formData.append('roomId', roomId);
+    formData.append('soundId', soundId);
+
+    const res = await fetch('/api/sounds/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.audioUrl) {
+        await saveBlobToIndexedDB(`sound_${roomId}_${soundId}`, blob);
+        return data.audioUrl;
+      }
+    }
+  } catch (err) {
+    console.warn('Server sound upload failed, using local fallback:', err);
+  }
+
+  // 3. Fallback for offline mode: Store locally in IndexedDB
   await saveBlobToIndexedDB(`sound_${roomId}_${soundId}`, blob);
   return URL.createObjectURL(blob);
 }

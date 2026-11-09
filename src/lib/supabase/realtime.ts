@@ -7,6 +7,7 @@ import {
   SoundboardSyncMessage,
   PTTSignalMessage,
   PTTStateMessage,
+  PTTAudioChunkMessage,
   DevicePresence,
 } from '../types/soundboard';
 
@@ -17,6 +18,7 @@ export interface RoomEventHandlers {
   onSoundboardSync?: (msg: SoundboardSyncMessage) => void;
   onPTTSignal?: (msg: PTTSignalMessage) => void;
   onPTTState?: (msg: PTTStateMessage) => void;
+  onPTTAudioChunk?: (msg: PTTAudioChunkMessage) => void;
   onPresenceChange?: (devices: DevicePresence[]) => void;
 }
 
@@ -28,6 +30,9 @@ export class RealtimeManager {
   private sseEventSource: EventSource | null = null;
   private handlers: RoomEventHandlers = {};
   private activeDevices: Map<string, DevicePresence> = new Map();
+  private isDestroyed: boolean = false;
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
 
   constructor(roomId: string, device: DevicePresence, handlers: RoomEventHandlers) {
     this.roomId = roomId;
@@ -36,6 +41,7 @@ export class RealtimeManager {
   }
 
   public connect(): void {
+    this.isDestroyed = false;
     const supabase = getSupabase();
 
     // 1. Setup local browser BroadcastChannel (same-device tabs)
@@ -52,33 +58,15 @@ export class RealtimeManager {
       }
     }
 
-    // 2. Setup Server-Sent Events (SSE) for cross-device LAN / Cloud communication
-    if (typeof window !== 'undefined' && typeof EventSource !== 'undefined') {
-      try {
-        const streamUrl = `/api/realtime/stream?roomId=${encodeURIComponent(this.roomId)}&deviceId=${encodeURIComponent(
-          this.device.id
-        )}`;
-        this.sseEventSource = new EventSource(streamUrl);
+    // 2. Setup Server-Sent Events (SSE) with Auto-Reconnect
+    this.setupSSE();
 
-        this.sseEventSource.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.senderId === this.device.id) return;
-            this.handleIncomingEvent(data.type, data.payload);
-          } catch (e) {
-            console.warn('SSE message parse error:', e);
-          }
-        };
-
-        this.sseEventSource.onerror = (e) => {
-          console.warn('SSE connection state/error:', e);
-        };
-      } catch (e) {
-        console.warn('SSE not initialized:', e);
-      }
+    // 3. Listen to page visibility changes (phone screen lock / tab switch)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('visibilitychange', this.handleVisibilityChange);
     }
 
-    // 3. Setup Supabase Realtime if configured
+    // 4. Setup Supabase Realtime if configured
     if (supabase && isSupabaseConfigured()) {
       this.channel = supabase.channel(`room:${this.roomId}`, {
         config: {
@@ -94,6 +82,7 @@ export class RealtimeManager {
         .on('broadcast', { event: 'soundboard:sync' }, ({ payload }) => this.handlers.onSoundboardSync?.(payload))
         .on('broadcast', { event: 'ptt:signal' }, ({ payload }) => this.handlers.onPTTSignal?.(payload))
         .on('broadcast', { event: 'ptt:state' }, ({ payload }) => this.handlers.onPTTState?.(payload))
+        .on('broadcast', { event: 'ptt:chunk' }, ({ payload }) => this.handlers.onPTTAudioChunk?.(payload))
         .on('presence', { event: 'sync' }, () => {
           if (!this.channel) return;
           const state = this.channel.presenceState<{ device: DevicePresence }>();
@@ -118,7 +107,72 @@ export class RealtimeManager {
 
     // Broadcast presence join to other peers
     this.broadcastBoth('presence:join', this.device);
+
+    // Periodic heartbeat presence broadcast every 8 seconds so connection never drops
+    this.heartbeatTimer = setInterval(() => {
+      if (this.isDestroyed) return;
+      this.broadcastBoth('presence:join', this.device);
+    }, 8000);
   }
+
+  private setupSSE(): void {
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined' || this.isDestroyed) return;
+
+    if (this.sseEventSource) {
+      try {
+        this.sseEventSource.close();
+      } catch {}
+    }
+
+    try {
+      const streamUrl = `/api/realtime/stream?roomId=${encodeURIComponent(this.roomId)}&deviceId=${encodeURIComponent(
+        this.device.id
+      )}`;
+      this.sseEventSource = new EventSource(streamUrl);
+
+      this.sseEventSource.onopen = () => {
+        // Re-announce presence on open/reconnect
+        this.broadcastBoth('presence:join', this.device);
+      };
+
+      this.sseEventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.senderId === this.device.id) return;
+          this.handleIncomingEvent(data.type, data.payload);
+        } catch {
+          // Keepalive or comment line, ignore
+        }
+      };
+
+      this.sseEventSource.onerror = () => {
+        if (this.isDestroyed) return;
+        // Schedule auto-reconnect if dropped
+        if (this.sseEventSource) {
+          this.sseEventSource.close();
+          this.sseEventSource = null;
+        }
+        if (!this.reconnectTimer) {
+          this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            this.setupSSE();
+          }, 1500);
+        }
+      };
+    } catch (e) {
+      console.warn('SSE initialization error:', e);
+    }
+  }
+
+  private handleVisibilityChange = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      if (!this.sseEventSource || this.sseEventSource.readyState === EventSource.CLOSED) {
+        this.setupSSE();
+      } else {
+        this.broadcastBoth('presence:join', this.device);
+      }
+    }
+  };
 
   private handleIncomingEvent(type: string, payload: unknown): void {
     switch (type) {
@@ -140,13 +194,18 @@ export class RealtimeManager {
       case 'ptt:state':
         this.handlers.onPTTState?.(payload as PTTStateMessage);
         break;
+      case 'ptt:chunk':
+        this.handlers.onPTTAudioChunk?.(payload as PTTAudioChunkMessage);
+        break;
       case 'presence:join': {
         const d = payload as DevicePresence;
         if (d && d.id) {
+          const wasPresent = this.activeDevices.has(d.id);
           this.activeDevices.set(d.id, d);
           this.emitPresenceUpdate();
-          // Reply with self presence so the newly joined device knows about us immediately!
-          this.broadcastBoth('presence:reply', this.device);
+          if (!wasPresent) {
+            this.broadcastBoth('presence:reply', this.device);
+          }
         }
         break;
       }
@@ -272,8 +331,34 @@ export class RealtimeManager {
     }
   }
 
+  public sendPTTAudioChunk(msg: PTTAudioChunkMessage): void {
+    this.broadcastBoth('ptt:chunk', msg);
+    if (this.channel) {
+      this.channel.send({
+        type: 'broadcast',
+        event: 'ptt:chunk',
+        payload: msg,
+      });
+    }
+  }
+
   public disconnect(): void {
+    this.isDestroyed = true;
     this.broadcastBoth('presence:leave', { id: this.device.id });
+
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    }
+
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
 
     if (this.sseEventSource) {
       this.sseEventSource.close();
