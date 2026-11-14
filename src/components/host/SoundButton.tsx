@@ -49,26 +49,23 @@ export function SoundButton({
   return (
     <div
       onClick={handleClick}
-      className={`group relative flex flex-col justify-between rounded-2xl border transition-all duration-150 select-none cursor-pointer overflow-hidden ${
-        isController ? 'p-3.5 min-h-[92px]' : 'p-4 min-h-[110px]'
+      className={`group relative flex flex-col justify-between rounded-xl border transition-all duration-100 select-none cursor-pointer overflow-hidden ${
+        isController ? 'p-3 min-h-[82px]' : 'p-3.5 min-h-[96px]'
       } ${
         isPlaying
-          ? 'bg-surface-light border-white/40 shadow-lg scale-[0.98]'
-          : 'bg-surface hover:bg-surface-light border-surface-border hover:border-zinc-700 shadow-md active:scale-95'
+          ? 'bg-zinc-800 border-zinc-500 scale-[0.98]'
+          : 'bg-zinc-900/90 hover:bg-zinc-900 border-zinc-800/80 hover:border-zinc-700 active:scale-95'
       }`}
-      style={{
-        boxShadow: isPlaying ? `0 0 24px ${buttonColor}88, inset 0 0 12px ${buttonColor}33` : undefined,
-      }}
     >
       {/* Top row: Color Accent Bar / Hotkey & Menu */}
       <div className="flex items-center justify-between w-full">
         <div className="flex items-center gap-1.5">
           <span
-            className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
+            className="w-2 h-2 rounded-full shrink-0"
             style={{ backgroundColor: buttonColor }}
           />
           {sound.hotkey && !isController && (
-            <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-surface-border text-zinc-300">
+            <span className="text-[10px] font-mono font-medium px-1 py-0.2 rounded bg-zinc-800 text-zinc-400">
               {sound.hotkey}
             </span>
           )}
@@ -77,14 +74,10 @@ export function SoundButton({
         {/* Action icons / Menu */}
         <div className="flex items-center gap-1">
           {isPlaying ? (
-            <span className="flex items-center justify-center p-1 rounded-full bg-red-500/20 text-red-400">
+            <span className="flex items-center justify-center p-0.5 rounded text-red-400">
               <Square className="w-3.5 h-3.5 fill-current" />
             </span>
-          ) : (
-            <span className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-zinc-400 hover:text-white">
-              <Play className="w-3.5 h-3.5 fill-current" />
-            </span>
-          )}
+          ) : null}
 
           {!isController && (onDelete || onRename) && (
             <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -136,22 +129,22 @@ export function SoundButton({
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               onBlur={handleSaveRename}
-              className="w-full bg-surface-border text-white text-xs px-2 py-1 rounded outline-none border border-accent"
+              className="w-full bg-zinc-800 text-white text-xs px-2 py-1 rounded outline-none border border-zinc-600"
             />
           </form>
         ) : (
-          <p className="font-bold text-white text-sm tracking-tight leading-snug line-clamp-2">
+          <p className="font-medium text-zinc-100 text-sm tracking-tight leading-snug line-clamp-2">
             {sound.name}
           </p>
         )}
       </div>
 
       {/* Bottom row: Duration and Status */}
-      <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono">
+      <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono">
         <span>{sound.duration ? `${sound.duration.toFixed(1)}s` : 'audio'}</span>
         {isPlaying && (
-          <span className="flex items-center gap-1 text-emerald-400 font-sans font-semibold text-[10px]">
-            <Volume2 className="w-3 h-3 animate-pulse" /> PLAYING
+          <span className="flex items-center gap-1 text-emerald-400 font-sans font-medium text-[10px]">
+            <Volume2 className="w-3 h-3 animate-pulse" /> Playing
           </span>
         )}
       </div>

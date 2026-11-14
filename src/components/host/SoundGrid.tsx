@@ -59,16 +59,17 @@ export function SoundGrid({
   return (
     <div className="space-y-4">
       {/* Category Filter Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none no-scrollbar">
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none no-scrollbar">
         <button
           onClick={() => setSelectedCategoryId('all')}
-          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 ${
             selectedCategoryId === 'all'
-              ? 'bg-accent text-white shadow-md shadow-indigo-500/25'
-              : 'bg-surface hover:bg-surface-light text-zinc-400 hover:text-white border border-surface-border'
+              ? 'bg-zinc-100 text-zinc-950 shadow-sm'
+              : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
           }`}
         >
-          <Layers className="w-3.5 h-3.5" /> All Sounds ({sounds.length})
+          <span>All</span>
+          <span className="text-[10px] opacity-60">({sounds.length})</span>
         </button>
 
         {categories.map((cat) => {
@@ -77,14 +78,14 @@ export function SoundGrid({
             <button
               key={cat.id}
               onClick={() => setSelectedCategoryId(cat.id)}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 ${
                 selectedCategoryId === cat.id
-                  ? 'bg-accent text-white shadow-md shadow-indigo-500/25'
-                  : 'bg-surface hover:bg-surface-light text-zinc-400 hover:text-white border border-surface-border'
+                  ? 'bg-zinc-100 text-zinc-950 shadow-sm'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
               }`}
             >
               <span>{cat.name}</span>
-              <span className="text-[10px] opacity-75 font-mono">({count})</span>
+              <span className="text-[10px] opacity-60">({count})</span>
             </button>
           );
         })}

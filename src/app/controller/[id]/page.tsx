@@ -9,9 +9,7 @@ import { DEFAULT_CATEGORIES, getDefaultSounds } from '../../../lib/presets/defau
 import { ControllerHeader } from '../../../components/controller/ControllerHeader';
 import { PushToTalkButton } from '../../../components/controller/PushToTalkButton';
 import { SoundGrid } from '../../../components/host/SoundGrid';
-import { GalleryUploadModal } from '../../../components/controller/GalleryUploadModal';
-import { VoiceRecorderModal } from '../../../components/controller/VoiceRecorderModal';
-import { InstallGuideModal } from '../../../components/pwa/InstallGuideModal';
+import { AddSoundModal } from '../../../components/controller/AddSoundModal';
 
 export default function ControllerScreen() {
   const params = useParams();
@@ -25,9 +23,7 @@ export default function ControllerScreen() {
   const [playOnPhone, setPlayOnPhone] = useState<boolean>(true); // Enabled by default per user request!
 
   // Modals
-  const [showGalleryUpload, setShowGalleryUpload] = useState<boolean>(false);
-  const [showVoiceRecorder, setShowVoiceRecorder] = useState<boolean>(false);
-  const [showInstallGuide, setShowInstallGuide] = useState<boolean>(false);
+  const [showAddModal, setShowAddModal] = useState<boolean>(false);
 
   // References
   const realtimeRef = useRef<RealtimeManager | null>(null);
@@ -219,67 +215,44 @@ export default function ControllerScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col justify-between pb-safe">
-      {/* Mobile Header with safe area insets */}
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-between select-none">
+      {/* Sleek Minimalist Header */}
       <ControllerHeader
         roomId={roomId}
         isConnected={isConnected}
         playOnPhone={playOnPhone}
         onTogglePlayOnPhone={() => setPlayOnPhone(!playOnPhone)}
         onStopAll={handleStopAll}
-        onOpenGalleryUpload={() => setShowGalleryUpload(true)}
-        onOpenVoiceRecorder={() => setShowVoiceRecorder(true)}
-        onOpenInstallGuide={() => setShowInstallGuide(true)}
+        onOpenAddModal={() => setShowAddModal(true)}
       />
 
-      {/* Main Controller Content */}
-      <main className="flex-1 max-w-md w-full mx-auto p-3.5 space-y-4">
-        {/* Push-to-Talk Wireless Microphone Section */}
-        <section className="bg-surface/90 rounded-3xl border border-surface-border p-4 shadow-xl">
-          <PushToTalkButton pttClient={pttClient} isConnected={isConnected} />
-        </section>
-
-        {/* Soundboard Buttons Section */}
-        <section className="space-y-2">
-          <div className="flex items-center justify-between text-xs font-bold text-zinc-400 px-1">
-            <span>MEME SOUNDBOARD</span>
-            <span className="text-[11px] text-zinc-500">
-              {playOnPhone ? 'Plays on phone & PC' : 'Plays on PC'}
-            </span>
-          </div>
-
-          <SoundGrid
-            sounds={sounds}
-            categories={categories}
-            activeSoundIds={activeSoundIds}
-            onPlaySound={handlePlaySound}
-            onStopSound={handleStopSound}
-            onOpenAddModal={() => setShowGalleryUpload(true)}
-            isController={true}
-          />
-        </section>
+      {/* Main Soundboard Content */}
+      <main className="flex-1 max-w-md w-full mx-auto p-3 pb-24 space-y-3">
+        <SoundGrid
+          sounds={sounds}
+          categories={categories}
+          activeSoundIds={activeSoundIds}
+          onPlaySound={handlePlaySound}
+          onStopSound={handleStopSound}
+          onOpenAddModal={() => setShowAddModal(true)}
+          isController={true}
+        />
       </main>
 
-      {/* MODALS */}
-      <GalleryUploadModal
-        isOpen={showGalleryUpload}
-        onClose={() => setShowGalleryUpload(false)}
+      {/* Floating Bottom Push-to-Talk Dock */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-zinc-950 via-zinc-950/95 to-transparent pb-[max(12px,env(safe-area-inset-bottom))] pt-2">
+        <PushToTalkButton pttClient={pttClient} isConnected={isConnected} />
+      </div>
+
+      {/* Clean Unified Add Sound Modal */}
+      <AddSoundModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
         roomId={roomId}
         categories={categories}
         soundsCount={sounds.length}
         onAddSound={handleAddSoundFromMobile}
       />
-
-      <VoiceRecorderModal
-        isOpen={showVoiceRecorder}
-        onClose={() => setShowVoiceRecorder(false)}
-        roomId={roomId}
-        categories={categories}
-        soundsCount={sounds.length}
-        onAddSound={handleAddSoundFromMobile}
-      />
-
-      <InstallGuideModal isOpen={showInstallGuide} onClose={() => setShowInstallGuide(false)} />
     </div>
   );
 }

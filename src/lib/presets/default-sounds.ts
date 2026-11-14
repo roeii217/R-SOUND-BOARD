@@ -156,13 +156,13 @@ export async function getDefaultSounds(roomId: string): Promise<Sound[]> {
       id: `sound-${roomId}-13`,
       roomId,
       categoryId: 'cat-viral',
-      name: '🎵 Tunak Tunak Tun',
-      audioUrl: '/sounds/tunak.mp3',
-      duration: 5.0,
+      name: '🎵 Loud Indian Meme',
+      audioUrl: '/sounds/loud-indian.mp3',
+      duration: 3.5,
       color: '#f59e0b', // Amber
       hotkey: 'E',
       orderIndex: 12,
-      volume: 0.9,
+      volume: 0.95,
     },
     {
       id: `sound-${roomId}-14`,

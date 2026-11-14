@@ -25,8 +25,20 @@ export async function GET() {
 
   const preferred = wifiIp || validLanIp || ips[0];
 
+  let tunnelUrl = '';
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const p = path.join(process.cwd(), 'src', 'lib', 'tunnel.json');
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, 'utf-8'));
+      tunnelUrl = data.tunnelUrl || '';
+    }
+  } catch {}
+
   return NextResponse.json({
     ip: preferred?.address || 'localhost',
     allIps: ips,
+    tunnelUrl,
   });
 }

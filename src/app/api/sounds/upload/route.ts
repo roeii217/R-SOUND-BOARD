@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     const filePath = path.join(uploadsDir, cleanFileName);
     fs.writeFileSync(filePath, buffer);
 
-    const audioUrl = `/uploads/${cleanFileName}`;
+    const audioUrl = `/api/sounds/file/${cleanFileName}`;
     return NextResponse.json({ success: true, audioUrl, fileName: cleanFileName });
   } catch (err: unknown) {
     console.error('Sound upload error:', err);

@@ -21,12 +21,15 @@ export function QRCodeModal({ isOpen, onClose, roomId }: QRCodeModalProps) {
       const port = window.location.port ? `:${window.location.port}` : '';
       const protocol = window.location.protocol;
 
-      // If running on localhost or 127.0.0.1, fetch machine's local Wi-Fi IP so phones can connect
+      // If running on localhost or 127.0.0.1, fetch machine's local Wi-Fi IP or HTTPS tunnel so phones can connect
       if (hostname === 'localhost' || hostname === '127.0.0.1') {
         fetch('/api/network-ip')
           .then((res) => res.json())
           .then((data) => {
-            if (data.ip && data.ip !== 'localhost') {
+            if (data.tunnelUrl) {
+              // HTTPS tunnel allows microphone access and PTT on mobile phones!
+              setNetworkHost(data.tunnelUrl);
+            } else if (data.ip && data.ip !== 'localhost') {
               setNetworkHost(`${protocol}//${data.ip}${port}`);
             }
           })
