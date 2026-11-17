@@ -14,6 +14,8 @@ export class AudioEngine {
   private analyser: AnalyserNode | null = null;
   private bufferCache: Map<string, AudioBuffer> = new Map();
   private activeSounds: Map<string, ActiveSoundInstance[]> = new Map();
+  private fallbackAudios: HTMLAudioElement[] = [];
+  private scheduledTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private volume: number = 0.8;
   private isMuted: boolean = false;
   private playbackMode: PlaybackMode = 'polyphonic';
@@ -192,6 +194,10 @@ export class AudioEngine {
       const audio = new Audio(url);
       audio.volume = this.isMuted ? 0 : this.volume * volume;
       audio.loop = loop;
+      this.fallbackAudios.push(audio);
+      audio.onended = () => {
+        this.fallbackAudios = this.fallbackAudios.filter((a) => a !== audio);
+      };
       audio.play().catch((e) => console.warn('HTML Audio play error:', e));
     } catch (e) {
       console.warn('Fallback audio failed:', e);
@@ -214,6 +220,11 @@ export class AudioEngine {
   }
 
   public stopAll(): void {
+    // 1. Cancel all scheduled (delayed) sounds
+    this.scheduledTimeouts.forEach((handle) => clearTimeout(handle));
+    this.scheduledTimeouts.clear();
+
+    // 2. Stop all Web Audio buffer sources
     this.activeSounds.forEach((instances) => {
       instances.forEach((inst) => {
         try {
@@ -225,6 +236,77 @@ export class AudioEngine {
       });
     });
     this.activeSounds.clear();
+
+    // 3. Stop all fallback HTML5 audio elements
+    this.fallbackAudios.forEach((audio) => {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {}
+    });
+    this.fallbackAudios = [];
+
+    // 4. Immediately cut master gain to 0 to eliminate any reverb/tail/delay
+    if (this.masterGain && this.ctx) {
+      this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime);
+      setTimeout(() => {
+        if (this.masterGain && this.ctx && !this.isMuted) {
+          this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+        }
+      }, 60);
+    }
+  }
+
+  /**
+   * Schedule a sound to play after a delay (in ms).
+   * Returns the scheduleId for cancellation.
+   */
+  public schedulePlay(options: {
+    scheduleId: string;
+    delayMs: number;
+    soundId: string;
+    audioUrl: string;
+    volume?: number;
+    loop?: boolean;
+    playbackMode?: PlaybackMode;
+    onPlay?: () => void;
+  }): void {
+    const { scheduleId, delayMs } = options;
+    // Cancel any existing schedule with same id
+    this.cancelScheduled(scheduleId);
+
+    const handle = setTimeout(() => {
+      this.scheduledTimeouts.delete(scheduleId);
+      options.onPlay?.();
+      this.play({
+        soundId: options.soundId,
+        audioUrl: options.audioUrl,
+        volume: options.volume,
+        loop: options.loop,
+        playbackMode: options.playbackMode,
+      });
+    }, delayMs);
+
+    this.scheduledTimeouts.set(scheduleId, handle);
+  }
+
+  public cancelScheduled(scheduleId: string): boolean {
+    const handle = this.scheduledTimeouts.get(scheduleId);
+    if (handle !== undefined) {
+      clearTimeout(handle);
+      this.scheduledTimeouts.delete(scheduleId);
+      return true;
+    }
+    return false;
+  }
+
+  public cancelAllScheduled(): void {
+    this.scheduledTimeouts.forEach((handle) => clearTimeout(handle));
+    this.scheduledTimeouts.clear();
+  }
+
+  public getScheduledCount(): number {
+    return this.scheduledTimeouts.size;
   }
 
   public isPlaying(soundId: string): boolean {

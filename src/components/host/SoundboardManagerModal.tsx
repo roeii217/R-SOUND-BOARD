@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { Modal } from '../ui/Modal';
 import { Sound, Category } from '../../lib/types/soundboard';
 import { uploadSoundAudio, blobToBase64, urlToBlob } from '../../lib/storage/sound-storage';
+import { extractAudioFromMediaFile, isVideoFile } from '../../lib/audio/video-extractor';
 import {
   Upload,
   Download,
@@ -83,20 +84,37 @@ export function SoundboardManagerModal({
 
     try {
       const soundId = `sound-${roomId}-${Date.now()}`;
-      const audioUrl = await uploadSoundAudio(roomId, soundId, audioFile, audioFile.name);
-
-      // Estimate duration
+      let uploadBlob: Blob = audioFile;
+      let ext = audioFile.name.split('.').pop() || 'wav';
       let duration = 1.0;
-      try {
-        const audio = new Audio(audioUrl);
-        await new Promise<void>((res) => {
-          audio.onloadedmetadata = () => {
-            duration = audio.duration;
-            res();
-          };
-          audio.onerror = () => res();
-        });
-      } catch {}
+
+      if (isVideoFile(audioFile)) {
+        setStatusMessage({ type: 'success', text: 'Extracting audio from video file...' });
+        try {
+          const res = await extractAudioFromMediaFile(audioFile);
+          uploadBlob = res.audioBlob;
+          duration = res.duration || 2.0;
+          ext = res.audioBlob === audioFile ? ext : 'wav';
+        } catch {
+          uploadBlob = audioFile;
+        }
+      }
+
+      const audioUrl = await uploadSoundAudio(roomId, soundId, uploadBlob, `sound.${ext}`);
+
+      // Estimate duration if not already from video
+      if (!isVideoFile(audioFile)) {
+        try {
+          const audio = new Audio(audioUrl);
+          await new Promise<void>((res) => {
+            audio.onloadedmetadata = () => {
+              duration = audio.duration;
+              res();
+            };
+            audio.onerror = () => res();
+          });
+        } catch {}
+      }
 
       const newSound: Sound = {
         id: soundId,
@@ -231,15 +249,15 @@ export function SoundboardManagerModal({
         {/* TAB 1: ADD SOUND */}
         {tab === 'add' && (
           <form onSubmit={handleCreateSound} className="space-y-3.5">
-            {/* Audio File Picker */}
+            {/* Audio/Video File Picker */}
             <div>
               <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                Audio File (MP3, WAV, WebM, OGG, M4A)
+                Audio or Video File (MP3, WAV, MP4, MOV, WebM, M4A)
               </label>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="audio/*"
+                accept="audio/*,video/*"
                 onChange={handleFileChange}
                 className="hidden"
               />
@@ -249,7 +267,7 @@ export function SoundboardManagerModal({
                 className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-surface-border hover:border-accent bg-surface-light hover:bg-surface-light/80 text-zinc-300 text-xs font-medium transition-all"
               >
                 <FileAudio className="w-4 h-4 text-accent" />
-                <span>{audioFile ? audioFile.name : 'Choose audio file from computer...'}</span>
+                <span>{audioFile ? audioFile.name : 'Choose audio or video file from computer...'}</span>
               </button>
             </div>
 

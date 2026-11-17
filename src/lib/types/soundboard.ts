@@ -34,7 +34,16 @@ export interface Sound {
   orderIndex: number;
   volume?: number; // 0.0 to 1.0 individual trim
   loop?: boolean;
+  delay?: number; // optional playback delay in seconds (0 = instant)
   createdAt?: string;
+}
+
+export interface ScheduledSound {
+  scheduleId: string;
+  sound: Sound;
+  delayMs: number;
+  scheduledAt: number; // Date.now() when it was queued
+  endsAt: number;      // scheduledAt + delayMs
 }
 
 export interface DevicePresence {
@@ -53,6 +62,12 @@ export interface PlaySoundMessage {
   loop?: boolean;
   playbackMode?: PlaybackMode;
   timestamp: number;
+  delay?: number;       // optional delay in seconds before playback
+  scheduleId?: string;  // unique ID so host can cancel it
+}
+
+export interface CancelScheduledMessage {
+  scheduleId: string;
 }
 
 export interface StopSoundMessage {

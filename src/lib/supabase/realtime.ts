@@ -8,6 +8,7 @@ import {
   PTTSignalMessage,
   PTTStateMessage,
   PTTAudioChunkMessage,
+  CancelScheduledMessage,
   DevicePresence,
 } from '../types/soundboard';
 
@@ -16,6 +17,7 @@ export interface RoomEventHandlers {
   onStopSound?: (msg: StopSoundMessage) => void;
   onVolumeChange?: (msg: VolumeMessage) => void;
   onSoundboardSync?: (msg: SoundboardSyncMessage) => void;
+  onCancelScheduled?: (msg: CancelScheduledMessage) => void;
   onPTTSignal?: (msg: PTTSignalMessage) => void;
   onPTTState?: (msg: PTTStateMessage) => void;
   onPTTAudioChunk?: (msg: PTTAudioChunkMessage) => void;
@@ -33,6 +35,8 @@ export class RealtimeManager {
   private isDestroyed: boolean = false;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
+  // Deduplication: track recently seen sound play events (key = soundId+timestamp)
+  private seenPlayEvents: Map<string, number> = new Map();
 
   constructor(roomId: string, device: DevicePresence, handlers: RoomEventHandlers) {
     this.roomId = roomId;
@@ -80,6 +84,7 @@ export class RealtimeManager {
         .on('broadcast', { event: 'sound:stop' }, ({ payload }) => this.handlers.onStopSound?.(payload))
         .on('broadcast', { event: 'sound:volume' }, ({ payload }) => this.handlers.onVolumeChange?.(payload))
         .on('broadcast', { event: 'soundboard:sync' }, ({ payload }) => this.handlers.onSoundboardSync?.(payload))
+        .on('broadcast', { event: 'sound:cancel' }, ({ payload }) => this.handlers.onCancelScheduled?.(payload))
         .on('broadcast', { event: 'ptt:signal' }, ({ payload }) => this.handlers.onPTTSignal?.(payload))
         .on('broadcast', { event: 'ptt:state' }, ({ payload }) => this.handlers.onPTTState?.(payload))
         .on('broadcast', { event: 'ptt:chunk' }, ({ payload }) => this.handlers.onPTTAudioChunk?.(payload))
@@ -176,9 +181,20 @@ export class RealtimeManager {
 
   private handleIncomingEvent(type: string, payload: unknown): void {
     switch (type) {
-      case 'sound:play':
-        this.handlers.onPlaySound?.(payload as PlaySoundMessage);
+      case 'sound:play': {
+        const msg = payload as PlaySoundMessage;
+        // Deduplicate: ignore if same soundId+timestamp was seen within 3s
+        const dedupKey = `${msg.soundId}-${msg.timestamp}`;
+        const now = Date.now();
+        if (this.seenPlayEvents.has(dedupKey)) return;
+        this.seenPlayEvents.set(dedupKey, now);
+        // Clean up old dedup entries
+        this.seenPlayEvents.forEach((ts, k) => {
+          if (now - ts > 3000) this.seenPlayEvents.delete(k);
+        });
+        this.handlers.onPlaySound?.(msg);
         break;
+      }
       case 'sound:stop':
         this.handlers.onStopSound?.(payload as StopSoundMessage);
         break;
@@ -187,6 +203,9 @@ export class RealtimeManager {
         break;
       case 'soundboard:sync':
         this.handlers.onSoundboardSync?.(payload as SoundboardSyncMessage);
+        break;
+      case 'sound:cancel':
+        this.handlers.onCancelScheduled?.(payload as CancelScheduledMessage);
         break;
       case 'ptt:signal':
         this.handlers.onPTTSignal?.(payload as PTTSignalMessage);
@@ -304,6 +323,17 @@ export class RealtimeManager {
       this.channel.send({
         type: 'broadcast',
         event: 'soundboard:sync',
+        payload: msg,
+      });
+    }
+  }
+
+  public sendCancelScheduled(msg: CancelScheduledMessage): void {
+    this.broadcastBoth('sound:cancel', msg);
+    if (this.channel) {
+      this.channel.send({
+        type: 'broadcast',
+        event: 'sound:cancel',
         payload: msg,
       });
     }

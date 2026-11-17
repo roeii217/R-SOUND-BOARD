@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Radio,
@@ -13,6 +13,7 @@ import {
   ArrowRight,
   ShieldCheck,
   Zap,
+  Clock,
 } from 'lucide-react';
 import { InstallGuideModal } from '../components/pwa/InstallGuideModal';
 
@@ -28,59 +29,83 @@ function generateRandomRoomId(): string {
 export default function HomePage() {
   const router = useRouter();
   const [roomId, setRoomId] = useState('');
+  const [recentRooms, setRecentRooms] = useState<string[]>([]);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('echoboard_recent_rooms');
+      if (saved) {
+        setRecentRooms(JSON.parse(saved).slice(0, 3));
+      }
+    } catch {}
+  }, []);
+
+  const saveRecentRoom = (code: string) => {
+    try {
+      const current = recentRooms.filter((r) => r !== code);
+      const updated = [code, ...current].slice(0, 3);
+      localStorage.setItem('echoboard_recent_rooms', JSON.stringify(updated));
+      setRecentRooms(updated);
+    } catch {}
+  };
 
   const handleLaunchHost = (customRoom?: string) => {
     const target = (customRoom || roomId).trim().toUpperCase() || generateRandomRoomId();
+    saveRecentRoom(target);
     router.push(`/host/${target}`);
   };
 
   const handleLaunchController = (customRoom?: string) => {
     const target = (customRoom || roomId).trim().toUpperCase() || generateRandomRoomId();
+    saveRecentRoom(target);
     router.push(`/controller/${target}`);
   };
 
   return (
     <main className="min-h-screen flex flex-col justify-between px-4 py-8 max-w-4xl mx-auto">
       {/* Top Navbar */}
-      <header className="flex items-center justify-between pb-6 border-b border-surface-border">
+      <header className="flex items-center justify-between pb-6 border-b border-zinc-800">
         <div className="flex items-center gap-2.5">
-          <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-accent via-purple-600 to-cyan-500 p-0.5 shadow-lg shadow-indigo-500/20">
-            <div className="h-full w-full rounded-[14px] bg-surface flex items-center justify-center">
-              <Radio className="w-5 h-5 text-accent" />
+          <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-600 to-cyan-500 p-0.5 shadow-lg shadow-indigo-500/20">
+            <div className="h-full w-full rounded-[14px] bg-zinc-950 flex items-center justify-center">
+              <Radio className="w-5 h-5 text-indigo-400" />
             </div>
           </div>
           <div>
             <h1 className="font-black text-xl text-white tracking-tight">EchoBoard</h1>
-            <p className="text-xs text-zinc-400 font-medium">Remote Soundboard &amp; Wireless Mic</p>
+            <p className="text-xs text-zinc-400 font-medium">Wireless Remote Soundboard</p>
           </div>
         </div>
 
         <button
           onClick={() => setShowInstallGuide(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-light hover:bg-surface-border border border-surface-border text-zinc-300 text-xs font-semibold transition-all shadow-sm"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-semibold transition-all shadow-sm"
         >
-          <Download className="w-3.5 h-3.5 text-accent" />
-          <span>Install PWA</span>
+          <Download className="w-3.5 h-3.5 text-indigo-400" />
+          <span>Install App</span>
         </button>
       </header>
 
       {/* Main Hero & Quick Action Card */}
       <div className="py-10 space-y-8">
         <div className="text-center space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/15 border border-accent/30 text-accent text-xs font-bold">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 text-xs font-bold">
             <Sparkles className="w-3.5 h-3.5" /> Next-Gen Remote Audio Controller
           </div>
           <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-            Turn your phone into a <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent via-purple-400 to-cyan-400">wireless soundboard</span>
+            Turn your phone into a{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400">
+              wireless soundboard
+            </span>
           </h2>
           <p className="text-sm sm:text-base text-zinc-400 max-w-xl mx-auto leading-relaxed">
-            Open the soundboard on your computer. Tap sounds or talk through your microphone on your phone with instant sub-50ms playback.
+            Open the host board on your computer. Trigger sounds instantly or with delay presets from your phone with zero audible latency.
           </p>
         </div>
 
         {/* Room Entry Card */}
-        <div className="max-w-md mx-auto p-6 rounded-3xl bg-surface border border-surface-border shadow-2xl shadow-indigo-950/40 space-y-5">
+        <div className="max-w-md mx-auto p-6 rounded-3xl bg-zinc-900/90 border border-zinc-800 shadow-2xl shadow-indigo-950/40 space-y-5">
           <div className="space-y-2">
             <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider">
               Room Code
@@ -91,16 +116,34 @@ export default function HomePage() {
                 value={roomId}
                 onChange={(e) => setRoomId(e.target.value.toUpperCase())}
                 placeholder="Enter or create (e.g. ECHO-88)"
-                className="w-full px-4 py-3 rounded-2xl bg-surface-light border border-surface-border text-white font-mono text-sm uppercase font-bold tracking-wider placeholder:normal-case placeholder:font-sans placeholder:text-zinc-500 focus:outline-none focus:border-accent"
+                className="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-800 text-white font-mono text-sm uppercase font-bold tracking-wider placeholder:normal-case placeholder:font-sans placeholder:text-zinc-500 focus:outline-none focus:border-indigo-500"
               />
             </div>
           </div>
+
+          {/* Recent Rooms */}
+          {recentRooms.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap text-xs text-zinc-500">
+              <span className="flex items-center gap-1 text-[11px] text-zinc-400">
+                <Clock className="w-3 h-3" /> Recent:
+              </span>
+              {recentRooms.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRoomId(r)}
+                  className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-mono text-[11px] transition-colors"
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             <button
               onClick={() => handleLaunchHost()}
-              className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-accent hover:bg-accent-hover text-white font-bold text-xs shadow-lg shadow-indigo-500/25 transition-all active:scale-95 group"
+              className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-500/25 transition-all active:scale-95 group"
             >
               <Laptop className="w-4 h-4" />
               <span>Launch Host (PC)</span>
@@ -109,7 +152,7 @@ export default function HomePage() {
 
             <button
               onClick={() => handleLaunchController()}
-              className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-surface-light hover:bg-surface-border border border-surface-border text-white font-bold text-xs transition-all active:scale-95 group"
+              className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white font-bold text-xs transition-all active:scale-95 group"
             >
               <Smartphone className="w-4 h-4 text-cyan-400" />
               <span>Open Controller</span>
@@ -117,56 +160,56 @@ export default function HomePage() {
             </button>
           </div>
 
-          <div className="pt-2 text-center">
+          <div className="pt-1 text-center">
             <button
               onClick={() => {
                 const fresh = generateRandomRoomId();
                 handleLaunchHost(fresh);
               }}
-              className="text-xs text-zinc-400 hover:text-accent font-medium transition-colors underline"
+              className="text-xs text-zinc-400 hover:text-indigo-400 font-medium transition-colors underline"
             >
               ⚡ Click here to start a fresh room with 1-click
             </button>
           </div>
         </div>
 
-        {/* Feature Badges Grid */}
+        {/* Feature Highlights Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
-          <div className="p-4 rounded-2xl bg-surface/60 border border-surface-border space-y-1.5">
-            <div className="p-2 rounded-xl bg-indigo-500/10 text-accent w-fit">
+          <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-1.5">
+            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 w-fit">
               <Zap className="w-4 h-4" />
             </div>
-            <h3 className="font-bold text-white text-sm">Real-time Room Sync</h3>
+            <h3 className="font-bold text-white text-sm">Delayed Playback Queue</h3>
             <p className="text-xs text-zinc-400">
-              Supabase Realtime broadcast channels deliver sound triggers instantly to your computer with zero audible lag.
+              Set sound delay to 3s, 5s, 10s, or 15s. Countdown bars display pending sounds with instant cancellation.
             </p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-surface/60 border border-surface-border space-y-1.5">
+          <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-1.5">
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 w-fit">
               <Mic className="w-4 h-4" />
             </div>
-            <h3 className="font-bold text-white text-sm">Wireless Push-to-Talk</h3>
+            <h3 className="font-bold text-white text-sm">Instant Voice Recording</h3>
             <p className="text-xs text-zinc-400">
-              Hold the PTT button on your phone to stream live microphone audio straight into your computer speakers over WebRTC.
+              Record voice notes on your phone and automatically add them as new buttons played on the host computer.
             </p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-surface/60 border border-surface-border space-y-1.5">
+          <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-1.5">
             <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 w-fit">
               <Video className="w-4 h-4" />
             </div>
             <h3 className="font-bold text-white text-sm">Gallery Video Extractor</h3>
             <p className="text-xs text-zinc-400">
-              Upload video clips directly from iPhone Photos or Android Gallery. EchoBoard extracts the audio track in-browser.
+              Select videos from your iPhone or Android gallery — EchoBoard demuxes and plays the audio automatically.
             </p>
           </div>
         </div>
       </div>
 
       {/* Footer */}
-      <footer className="pt-6 border-t border-surface-border text-center text-xs text-zinc-500 flex flex-wrap items-center justify-between gap-2">
-        <p>EchoBoard • Inspired by RC Web Soundboard</p>
+      <footer className="pt-6 border-t border-zinc-800 text-center text-xs text-zinc-500 flex flex-wrap items-center justify-between gap-2">
+        <p>EchoBoard • Ultra-Low Latency Soundboard</p>
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1 text-emerald-400">
             <ShieldCheck className="w-3.5 h-3.5" /> PWA Ready (iOS &amp; Android)

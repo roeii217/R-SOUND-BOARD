@@ -20,6 +20,7 @@ interface HostHeaderProps {
   volume: number;
   isMuted: boolean;
   playbackMode: PlaybackMode;
+  scheduledCount?: number;
   onVolumeChange: (vol: number) => void;
   onMuteToggle: () => void;
   onPlaybackModeChange: (mode: PlaybackMode) => void;
@@ -35,6 +36,7 @@ export function HostHeader({
   volume,
   isMuted,
   playbackMode,
+  scheduledCount = 0,
   onVolumeChange,
   onMuteToggle,
   onPlaybackModeChange,
@@ -135,11 +137,16 @@ export function HostHeader({
           {/* Stop All Button */}
           <button
             onClick={onStopAll}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 hover:text-red-300 text-xs font-bold transition-all shadow-sm active:scale-95"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 hover:text-red-300 text-xs font-bold transition-all shadow-sm active:scale-95 relative"
             title="Stop all currently playing sounds"
           >
             <Square className="w-3.5 h-3.5 fill-current" />
             <span className="hidden sm:inline">Stop All</span>
+            {scheduledCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-amber-400 text-zinc-950 text-[9px] font-black flex items-center justify-center">
+                {scheduledCount}
+              </span>
+            )}
           </button>
 
           {/* Manager Button */}
