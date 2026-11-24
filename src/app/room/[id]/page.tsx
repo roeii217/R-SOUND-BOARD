@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Laptop, Smartphone, Radio, ArrowRight } from 'lucide-react';
+import { Radio, Loader2 } from 'lucide-react';
 
 export default function RoomDispatcher() {
   const params = useParams();
@@ -10,8 +10,6 @@ export default function RoomDispatcher() {
   const router = useRouter();
   const roomId = (params?.id as string)?.toUpperCase() || 'ECHO-DEFAULT';
   const modeParam = searchParams.get('mode');
-
-  const [isRedirecting, setIsRedirecting] = useState(true);
 
   useEffect(() => {
     if (modeParam === 'host') {
@@ -23,10 +21,10 @@ export default function RoomDispatcher() {
       return;
     }
 
-    // Auto-detect mobile vs desktop
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent
-    );
+    // Auto-detect mobile phone vs desktop computer and go directly to soundboard
+    const isMobile =
+      typeof navigator !== 'undefined' &&
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     if (isMobile) {
       router.replace(`/controller/${roomId}`);
@@ -36,35 +34,15 @@ export default function RoomDispatcher() {
   }, [modeParam, roomId, router]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-      <div className="max-w-md w-full bg-surface border border-surface-border rounded-3xl p-6 text-center space-y-5 shadow-2xl">
-        <div className="h-12 w-12 rounded-2xl bg-accent/20 border border-accent/40 mx-auto flex items-center justify-center">
-          <Radio className="w-6 h-6 text-accent animate-pulse" />
+    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <div className="h-12 w-12 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <Radio className="w-6 h-6 text-indigo-400 animate-pulse" />
         </div>
-
-        <div>
-          <h2 className="text-lg font-bold text-white">Connecting to Room {roomId}</h2>
-          <p className="text-xs text-zinc-400 mt-1">Choose how you want to use this device:</p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-          <button
-            onClick={() => router.push(`/host/${roomId}`)}
-            className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-surface-light hover:bg-surface-border border border-surface-border text-white text-xs font-bold transition-all group"
-          >
-            <Laptop className="w-6 h-6 text-accent" />
-            <span>Host Screen</span>
-            <span className="text-[10px] text-zinc-400 font-normal">Plays sound on computer</span>
-          </button>
-
-          <button
-            onClick={() => router.push(`/controller/${roomId}`)}
-            className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-accent hover:bg-accent-hover text-white text-xs font-bold transition-all shadow-lg shadow-indigo-500/20 group"
-          >
-            <Smartphone className="w-6 h-6" />
-            <span>Phone Controller</span>
-            <span className="text-[10px] text-indigo-200 font-normal">Triggers sounds &amp; mic</span>
-          </button>
+        <h2 className="text-base font-bold text-white tracking-tight">Opening Room {roomId}...</h2>
+        <div className="flex items-center gap-2 text-xs text-zinc-400">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+          <span>Loading Soundboard...</span>
         </div>
       </div>
     </div>

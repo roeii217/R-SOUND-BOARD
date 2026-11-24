@@ -14,7 +14,7 @@ export class AudioEngine {
   private analyser: AnalyserNode | null = null;
   private bufferCache: Map<string, AudioBuffer> = new Map();
   private activeSounds: Map<string, ActiveSoundInstance[]> = new Map();
-  private fallbackAudios: HTMLAudioElement[] = [];
+  private fallbackAudios: { soundId: string; audio: HTMLAudioElement }[] = [];
   private scheduledTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private volume: number = 0.8;
   private isMuted: boolean = false;
@@ -145,7 +145,7 @@ export class AudioEngine {
 
     if (!buffer) {
       // Fallback: standard HTML5 Audio element if decode failed
-      this.playFallbackAudio(audioUrl, volume, loop);
+      this.playFallbackAudio(soundId, audioUrl, volume, loop);
       return;
     }
 
@@ -185,18 +185,19 @@ export class AudioEngine {
 
       source.start(0);
     } catch {
-      this.playFallbackAudio(audioUrl, volume, loop);
+      this.playFallbackAudio(soundId, audioUrl, volume, loop);
     }
   }
 
-  private playFallbackAudio(url: string, volume: number, loop: boolean): void {
+  private playFallbackAudio(soundId: string, url: string, volume: number, loop: boolean): void {
     try {
       const audio = new Audio(url);
       audio.volume = this.isMuted ? 0 : this.volume * volume;
       audio.loop = loop;
-      this.fallbackAudios.push(audio);
+      const instance = { soundId, audio };
+      this.fallbackAudios.push(instance);
       audio.onended = () => {
-        this.fallbackAudios = this.fallbackAudios.filter((a) => a !== audio);
+        this.fallbackAudios = this.fallbackAudios.filter((a) => a !== instance);
       };
       audio.play().catch((e) => console.warn('HTML Audio play error:', e));
     } catch (e) {
@@ -205,6 +206,7 @@ export class AudioEngine {
   }
 
   public stop(soundId: string): void {
+    // 1. Stop all Web Audio buffer sources for this soundId
     const instances = this.activeSounds.get(soundId);
     if (instances) {
       instances.forEach((inst) => {
@@ -217,6 +219,18 @@ export class AudioEngine {
       });
       this.activeSounds.delete(soundId);
     }
+
+    // 2. Stop all fallback HTML5 audio instances for this soundId
+    this.fallbackAudios = this.fallbackAudios.filter((item) => {
+      if (item.soundId === soundId) {
+        try {
+          item.audio.pause();
+          item.audio.currentTime = 0;
+        } catch {}
+        return false;
+      }
+      return true;
+    });
   }
 
   public stopAll(): void {
@@ -238,10 +252,10 @@ export class AudioEngine {
     this.activeSounds.clear();
 
     // 3. Stop all fallback HTML5 audio elements
-    this.fallbackAudios.forEach((audio) => {
+    this.fallbackAudios.forEach((item) => {
       try {
-        audio.pause();
-        audio.currentTime = 0;
+        item.audio.pause();
+        item.audio.currentTime = 0;
       } catch {}
     });
     this.fallbackAudios = [];

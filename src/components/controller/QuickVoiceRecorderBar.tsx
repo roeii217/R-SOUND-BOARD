@@ -83,6 +83,7 @@ export function QuickVoiceRecorderBar({
       const newSound: Sound = {
         id: soundId,
         roomId,
+        categoryId: 'cat-reactions',
         name: `🎙️ Voice Note ${soundsCount + 1}`,
         audioUrl,
         duration: recordSeconds || 2.0,
@@ -92,8 +93,9 @@ export function QuickVoiceRecorderBar({
       };
 
       onAddSound(newSound);
-    } catch {
-      setErrorMsg('Failed to save recording.');
+    } catch (err) {
+      console.error('Save recording error:', err);
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to save recording.');
     } finally {
       setIsSaving(false);
       setRecordSeconds(0);

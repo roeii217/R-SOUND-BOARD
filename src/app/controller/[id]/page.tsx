@@ -30,13 +30,41 @@ export default function ControllerScreen() {
   const localAudioInstancesRef = useRef<HTMLAudioElement[]>([]);
   const pendingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  // 1. Load initial sounds
+  // 1. Load initial sounds from persistent room store
   useEffect(() => {
     let mounted = true;
-    getDefaultSounds(roomId).then((defaultSounds) => {
+
+    const loadRoomSounds = async () => {
+      try {
+        const res = await fetch(`/api/rooms/${roomId}/sounds`);
+        if (res.ok) {
+          const data = await res.json();
+          if (mounted && data.sounds && data.sounds.length > 0) {
+            setSounds(data.sounds);
+            if (data.categories) setCategories(data.categories);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Room sound fetch error, using defaults:', err);
+      }
+      const defaultSounds = await getDefaultSounds(roomId);
       if (mounted) setSounds(defaultSounds);
-    });
-    return () => { mounted = false; };
+    };
+
+    loadRoomSounds();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadRoomSounds();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [roomId]);
 
   // 2. Initialize Realtime Manager
@@ -260,9 +288,24 @@ export default function ControllerScreen() {
     setActiveSoundIds(new Set());
   };
 
-  const handleAddSoundFromMobile = (newSound: Sound) => {
-    const updated = [...sounds, newSound];
+  const handleAddSoundFromMobile = async (newSound: Sound) => {
+    const updated = [...sounds.filter((s) => s.id !== newSound.id), newSound];
     setSounds(updated);
+
+    try {
+      const res = await fetch(`/api/rooms/${roomId}/sounds`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sound: newSound }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.sounds) setSounds(data.sounds);
+      }
+    } catch (err) {
+      console.warn('Failed to save mobile sound to server:', err);
+    }
+
     realtimeRef.current?.sendSoundboardSync({ sounds: updated, categories });
   };
 

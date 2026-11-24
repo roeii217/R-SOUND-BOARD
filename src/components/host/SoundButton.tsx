@@ -28,20 +28,16 @@ export function SoundButton({
   const [editName, setEditName] = useState(sound.name);
   const [flash, setFlash] = useState(false);
 
-  // If the sound is currently playing, clicking it stops it!
-  // If not playing, clicking plays it (supports rapid spamming).
-  const handleClick = (e: React.MouseEvent | React.TouchEvent) => {
+  // Clicking the card ALWAYS plays the sound — supports rapid polyphonic spamming!
+  const handleCardClick = (e: React.MouseEvent | React.TouchEvent) => {
     e.stopPropagation();
-    if (isPlaying) {
-      onStop(sound);
-    } else {
-      setFlash(true);
-      setTimeout(() => setFlash(false), 160);
-      onPlay(sound);
-    }
+    setFlash(true);
+    setTimeout(() => setFlash(false), 140);
+    onPlay(sound);
   };
 
-  const handleStopExplicit = (e: React.MouseEvent | React.TouchEvent) => {
+  // Dedicated STOP button — stops this specific sound immediately
+  const handleStopClick = (e: React.MouseEvent | React.TouchEvent) => {
     e.stopPropagation();
     onStop(sound);
   };
@@ -59,29 +55,29 @@ export function SoundButton({
 
   const containerStyle: React.CSSProperties = {
     touchAction: 'manipulation',
-    backgroundColor: isPlaying ? 'rgba(239, 68, 68, 0.12)' : undefined,
-    borderColor: isPlaying ? '#ef4444' : undefined,
+    backgroundColor: isPlaying ? 'rgba(99, 102, 241, 0.12)' : undefined,
+    borderColor: isPlaying ? buttonColor : undefined,
     transform: flash ? 'scale(0.92)' : undefined,
   };
 
   return (
     <div
-      onClick={handleClick}
+      onClick={handleCardClick}
       style={containerStyle}
-      className={`group relative flex flex-col justify-between rounded-2xl border select-none cursor-pointer overflow-hidden transition-all duration-100 ${
+      className={`group relative flex flex-col justify-between rounded-2xl border select-none cursor-pointer overflow-hidden transition-all duration-75 ${
         isController ? 'p-3 min-h-[88px]' : 'p-3.5 min-h-[102px]'
       } ${
         isPlaying
-          ? 'ring-2 ring-red-500/50 shadow-lg shadow-red-950/40 bg-red-950/20'
+          ? 'ring-2 ring-indigo-500/40 shadow-lg shadow-indigo-950/30'
           : 'bg-zinc-900/90 hover:bg-zinc-850 border-zinc-800 hover:border-zinc-700 shadow-sm'
       }`}
     >
-      {/* Top row: Color Accent Dot / Hotkey / Menu / Playing status */}
+      {/* Top row: Color Accent Dot / Hotkey / STOP Button / Menu */}
       <div className="flex items-center justify-between w-full relative z-10">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span
-            className={`w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${isPlaying ? 'bg-red-500 animate-pulse' : ''}`}
-            style={{ backgroundColor: isPlaying ? '#ef4444' : buttonColor }}
+            className={`w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${isPlaying ? 'animate-ping' : ''}`}
+            style={{ backgroundColor: buttonColor }}
           />
           {hasDelay && (
             <span className="text-[9px] font-bold px-1 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
@@ -95,21 +91,24 @@ export function SoundButton({
           )}
         </div>
 
-        {/* STOP button when playing OR options menu when idle */}
-        {isPlaying ? (
-          <button
-            type="button"
-            onClick={handleStopExplicit}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[10px] font-black transition-all shadow-md animate-pulse"
-            title="Click to Stop this sound"
-          >
-            <Square className="w-2.5 h-2.5 fill-current" />
-            <span>STOP</span>
-          </button>
-        ) : (
-          !isController && (onDelete || onRename) && (
-            <div className="relative" onClick={(e) => e.stopPropagation()}>
+        {/* Action Controls: Prominent STOP button when playing, or Menu when idle */}
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          {isPlaying && (
+            <button
+              type="button"
+              onClick={handleStopClick}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-red-600 hover:bg-red-500 active:scale-90 text-white text-[10px] font-black transition-all shadow-md animate-pulse cursor-pointer"
+              title="Stop this sound"
+            >
+              <Square className="w-2.5 h-2.5 fill-current" />
+              <span>STOP</span>
+            </button>
+          )}
+
+          {!isController && (onDelete || onRename) && (
+            <div className="relative">
               <button
+                type="button"
                 onClick={() => setShowMenu(!showMenu)}
                 className="p-1 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100"
               >
@@ -117,9 +116,10 @@ export function SoundButton({
               </button>
 
               {showMenu && (
-                <div className="absolute right-0 top-6 z-20 w-32 rounded-xl bg-zinc-900 border border-zinc-800 p-1 shadow-2xl backdrop-blur-md">
+                <div className="absolute right-0 top-6 z-30 w-32 rounded-xl bg-zinc-900 border border-zinc-800 p-1 shadow-2xl backdrop-blur-md">
                   {onRename && (
                     <button
+                      type="button"
                       onClick={() => { setShowMenu(false); setIsEditing(true); }}
                       className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors text-left"
                     >
@@ -128,6 +128,7 @@ export function SoundButton({
                   )}
                   {onDelete && (
                     <button
+                      type="button"
                       onClick={() => { setShowMenu(false); onDelete(sound.id); }}
                       className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors text-left"
                     >
@@ -137,8 +138,8 @@ export function SoundButton({
                 </div>
               )}
             </div>
-          )
-        )}
+          )}
+        </div>
       </div>
 
       {/* Middle row: Sound Name */}
@@ -155,7 +156,7 @@ export function SoundButton({
             />
           </form>
         ) : (
-          <p className={`font-semibold text-sm tracking-tight leading-snug line-clamp-2 ${isPlaying ? 'text-red-200' : 'text-zinc-100'}`}>
+          <p className="font-semibold text-sm tracking-tight leading-snug line-clamp-2 text-zinc-100 group-hover:text-white transition-colors">
             {sound.name}
           </p>
         )}
@@ -165,8 +166,8 @@ export function SoundButton({
       <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono relative z-10">
         <span>{sound.duration ? `${sound.duration.toFixed(1)}s` : 'audio'}</span>
         {isPlaying ? (
-          <span className="flex items-center gap-1 text-red-400 font-sans font-bold text-[10px]">
-            <Volume2 className="w-3 h-3 animate-pulse" /> Playing (Tap to Stop)
+          <span className="flex items-center gap-1 font-sans font-bold text-[10px] text-emerald-400">
+            <Volume2 className="w-3 h-3 animate-pulse" /> Playing
           </span>
         ) : (
           <span className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 font-sans flex items-center gap-0.5">

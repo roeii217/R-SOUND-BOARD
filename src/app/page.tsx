@@ -4,8 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Radio,
-  Laptop,
-  Smartphone,
   Sparkles,
   Mic,
   Video,
@@ -14,6 +12,7 @@ import {
   ShieldCheck,
   Zap,
   Clock,
+  Play,
 } from 'lucide-react';
 import { InstallGuideModal } from '../components/pwa/InstallGuideModal';
 
@@ -50,16 +49,20 @@ export default function HomePage() {
     } catch {}
   };
 
-  const handleLaunchHost = (customRoom?: string) => {
+  // One-click launch: auto-detects phone vs computer and goes directly into the soundboard!
+  const handleLaunchSoundboard = (customRoom?: string) => {
     const target = (customRoom || roomId).trim().toUpperCase() || generateRandomRoomId();
     saveRecentRoom(target);
-    router.push(`/host/${target}`);
-  };
 
-  const handleLaunchController = (customRoom?: string) => {
-    const target = (customRoom || roomId).trim().toUpperCase() || generateRandomRoomId();
-    saveRecentRoom(target);
-    router.push(`/controller/${target}`);
+    const isMobile =
+      typeof navigator !== 'undefined' &&
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    if (isMobile) {
+      router.push(`/controller/${target}`);
+    } else {
+      router.push(`/host/${target}`);
+    }
   };
 
   return (
@@ -100,7 +103,7 @@ export default function HomePage() {
             </span>
           </h2>
           <p className="text-sm sm:text-base text-zinc-400 max-w-xl mx-auto leading-relaxed">
-            Open the host board on your computer. Trigger sounds instantly or with delay presets from your phone with zero audible latency.
+            Open the soundboard on your computer. Trigger sounds instantly or with delay presets from your phone with zero audible latency.
           </p>
         </div>
 
@@ -139,24 +142,15 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* Action Buttons */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          {/* Single Direct Action Button: Goes straight to the soundboard! */}
+          <div className="pt-1">
             <button
-              onClick={() => handleLaunchHost()}
-              className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-500/25 transition-all active:scale-95 group"
+              onClick={() => handleLaunchSoundboard()}
+              className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold text-sm shadow-lg shadow-indigo-500/25 transition-all group"
             >
-              <Laptop className="w-4 h-4" />
-              <span>Launch Host (PC)</span>
-              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-            </button>
-
-            <button
-              onClick={() => handleLaunchController()}
-              className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white font-bold text-xs transition-all active:scale-95 group"
-            >
-              <Smartphone className="w-4 h-4 text-cyan-400" />
-              <span>Open Controller</span>
-              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              <Play className="w-4 h-4 fill-current" />
+              <span>Enter Soundboard (כניסה לסאונדבורד)</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </button>
           </div>
 
@@ -164,11 +158,11 @@ export default function HomePage() {
             <button
               onClick={() => {
                 const fresh = generateRandomRoomId();
-                handleLaunchHost(fresh);
+                handleLaunchSoundboard(fresh);
               }}
               className="text-xs text-zinc-400 hover:text-indigo-400 font-medium transition-colors underline"
             >
-              ⚡ Click here to start a fresh room with 1-click
+              ⚡ Start a fresh room with 1-click
             </button>
           </div>
         </div>
@@ -181,7 +175,7 @@ export default function HomePage() {
             </div>
             <h3 className="font-bold text-white text-sm">Delayed Playback Queue</h3>
             <p className="text-xs text-zinc-400">
-              Set sound delay to 3s, 5s, 10s, or 15s. Countdown bars display pending sounds with instant cancellation.
+              Set sound delay to 3s, 5s, 10s, 15s or custom. Countdown bars display pending sounds with instant cancellation.
             </p>
           </div>
 

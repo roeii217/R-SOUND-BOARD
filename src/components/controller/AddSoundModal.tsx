@@ -179,7 +179,7 @@ export function AddSoundModal({
       handleClose();
     } catch (err) {
       console.error('Save sound error:', err);
-      setStatusMsg('Upload failed. Try again.');
+      setStatusMsg(err instanceof Error ? err.message : 'Upload failed. Try again.');
       setIsProcessing(false);
     }
   };

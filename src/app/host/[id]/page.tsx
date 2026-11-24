@@ -61,12 +61,36 @@ export default function HostScreen() {
     activeSoundTimersRef.current.set(soundId, t);
   }, []);
 
-  // 1. Initialize Default Sounds and Audio Engine
+  // 1. Initialize Sounds and Audio Engine
   useEffect(() => {
     let mounted = true;
-    getDefaultSounds(roomId).then((defaultSounds) => {
+
+    const loadRoomSounds = async () => {
+      try {
+        const res = await fetch(`/api/rooms/${roomId}/sounds`);
+        if (res.ok) {
+          const data = await res.json();
+          if (mounted && data.sounds && data.sounds.length > 0) {
+            setSounds(data.sounds);
+            if (data.categories) setCategories(data.categories);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Room sound fetch error, using defaults:', err);
+      }
+      const defaultSounds = await getDefaultSounds(roomId);
       if (mounted) setSounds(defaultSounds);
-    });
+    };
+
+    loadRoomSounds();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadRoomSounds();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibility);
 
     const engine = AudioEngine.getInstance();
     setVolume(engine.getVolume());
@@ -87,6 +111,7 @@ export default function HostScreen() {
 
     return () => {
       mounted = false;
+      window.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('click', unlockAudio);
       window.removeEventListener('keydown', unlockAudio);
       activeSoundTimersRef.current.forEach(clearTimeout);
@@ -354,15 +379,37 @@ export default function HostScreen() {
     setPlaybackMode(mode);
   };
 
-  const handleAddSound = (newSound: Sound) => {
-    const updated = [...sounds, newSound];
+  const handleAddSound = async (newSound: Sound) => {
+    const updated = [...sounds.filter((s) => s.id !== newSound.id), newSound];
     setSounds(updated);
+    try {
+      const res = await fetch(`/api/rooms/${roomId}/sounds`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sound: newSound }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.sounds) setSounds(data.sounds);
+      }
+    } catch (err) {
+      console.warn('Failed to save sound to server:', err);
+    }
     realtimeRef.current?.sendSoundboardSync({ sounds: updated, categories });
   };
 
-  const handleDeleteSound = (soundId: string) => {
+  const handleDeleteSound = async (soundId: string) => {
     const updated = sounds.filter((s) => s.id !== soundId);
     setSounds(updated);
+    try {
+      await fetch(`/api/rooms/${roomId}/sounds`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ soundId }),
+      });
+    } catch (err) {
+      console.warn('Failed to delete sound on server:', err);
+    }
     realtimeRef.current?.sendSoundboardSync({ sounds: updated, categories });
   };
 
